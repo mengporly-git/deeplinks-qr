@@ -502,66 +502,6 @@ class _InputWithHelp extends StatelessWidget {
   }
 }
 
-class _GooglePlayMark extends StatelessWidget {
-  const _GooglePlayMark();
-
-  @override
-  Widget build(BuildContext context) {
-    return const CustomPaint(
-      size: Size.square(28),
-      painter: _GooglePlayPainter(),
-    );
-  }
-}
-
-class _GooglePlayPainter extends CustomPainter {
-  const _GooglePlayPainter();
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final scaleX = size.width / 28;
-    final scaleY = size.height / 28;
-    canvas.scale(scaleX, scaleY);
-
-    canvas.drawPath(
-      Path()
-        ..moveTo(2, 2)
-        ..lineTo(15, 14)
-        ..lineTo(2, 26)
-        ..close(),
-      Paint()..color = const Color(0xFF00C4FF),
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(2, 2)
-        ..lineTo(19, 10.5)
-        ..lineTo(15, 14)
-        ..close(),
-      Paint()..color = const Color(0xFF00E676),
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(15, 14)
-        ..lineTo(19, 17.5)
-        ..lineTo(2, 26)
-        ..close(),
-      Paint()..color = const Color(0xFFFFD54F),
-    );
-    canvas.drawPath(
-      Path()
-        ..moveTo(19, 10.5)
-        ..lineTo(26, 14)
-        ..lineTo(19, 17.5)
-        ..lineTo(15, 14)
-        ..close(),
-      Paint()..color = const Color(0xFFFF5252),
-    );
-  }
-
-  @override
-  bool shouldRepaint(covariant CustomPainter oldDelegate) => false;
-}
-
 class _LogoPicker extends StatelessWidget {
   const _LogoPicker({
     required this.bytes,
