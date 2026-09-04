@@ -1,4 +1,4 @@
-enum VisitorPlatform { android, ios, desktop }
+enum VisitorPlatform { android, huawei, ios, desktop }
 
 VisitorPlatform detectVisitorPlatform() => VisitorPlatform.desktop;
 

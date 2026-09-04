@@ -1,10 +1,14 @@
 import 'package:web/web.dart' as web;
 
-enum VisitorPlatform { android, ios, desktop }
+enum VisitorPlatform { android, huawei, ios, desktop }
 
 VisitorPlatform detectVisitorPlatform() {
   final navigator = web.window.navigator;
   final userAgent = navigator.userAgent.toLowerCase();
+
+  if (userAgent.contains('huawei') || userAgent.contains('honor')) {
+    return VisitorPlatform.huawei;
+  }
 
   if (userAgent.contains('android')) {
     return VisitorPlatform.android;
