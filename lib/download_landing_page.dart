@@ -77,7 +77,7 @@ class _DownloadCard extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final compact = constraints.maxWidth < 700;
-        final logo = _AppLogo(path: config.logoPath, size: compact ? 112 : 190);
+        final logo = _AppLogo(path: config.logoPath, size: compact ? 96 : 128);
         final content = _CardContent(config: config, platform: platform);
 
         return DecoratedBox(
@@ -271,14 +271,24 @@ class _AppLogo extends StatelessWidget {
       final value when value.startsWith('data:image/') => Image.memory(
         base64Decode(value.substring(value.indexOf(',') + 1)),
         fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
         errorBuilder: _errorBuilder,
       ),
       final value when value.startsWith('https://') => Image.network(
         value,
         fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
         errorBuilder: _errorBuilder,
       ),
-      _ => Image.asset(path, fit: BoxFit.contain, errorBuilder: _errorBuilder),
+      _ => Image.asset(
+        path,
+        fit: BoxFit.contain,
+        filterQuality: FilterQuality.high,
+        isAntiAlias: true,
+        errorBuilder: _errorBuilder,
+      ),
     };
 
     return Container(

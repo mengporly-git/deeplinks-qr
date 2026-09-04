@@ -6,7 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:image/image.dart' as image_lib;
-import 'package:qr_flutter/qr_flutter.dart';
+import 'package:pretty_qr_code/pretty_qr_code.dart';
 
 import 'app_config.dart';
 import 'browser_navigation.dart';
@@ -27,6 +27,8 @@ class LinkBuilderPage extends StatefulWidget {
 }
 
 class _LinkBuilderPageState extends State<LinkBuilderPage> {
+  static const _qrErrorCorrectionLevel = QrErrorCorrectLevel.M;
+
   final _formKey = GlobalKey<FormState>();
   final _resultKey = GlobalKey();
   final _qrBoundaryKey = GlobalKey();
@@ -37,7 +39,7 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
 
   Uri? _generatedUrl;
   Uint8List? _logoPreviewBytes;
-  String? _logoDataUrl;
+  List<String> _logoDataUrls = const [];
   String? _logoFileName;
   bool _isPickingLogo = false;
   bool _isDownloadingQr = false;
@@ -100,18 +102,28 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
         return;
       }
 
-      final thumbnail = image_lib.copyResize(
-        decoded,
-        width: 32,
-        height: 32,
-        maintainAspect: true,
-        interpolation: image_lib.Interpolation.average,
-      );
-      final optimized = image_lib.encodeJpg(thumbnail, quality: 40);
+      final longestSide = decoded.width > decoded.height
+          ? decoded.width
+          : decoded.height;
+      final largestSize = longestSide.clamp(1, 192);
+      final sizes = <int>{
+        largestSize,
+        160,
+        128,
+        112,
+        96,
+        80,
+        64,
+        48,
+        32,
+      }.where((size) => size <= largestSize);
+      final optimizedLogos = [
+        for (final size in sizes) _encodeLogoDataUrl(decoded, size),
+      ];
 
       setState(() {
         _logoPreviewBytes = bytes;
-        _logoDataUrl = 'data:image/jpeg;base64,${base64Encode(optimized)}';
+        _logoDataUrls = optimizedLogos;
         _logoFileName = file.name;
       });
     } on Object {
@@ -128,9 +140,28 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
   void _removeLogo() {
     setState(() {
       _logoPreviewBytes = null;
-      _logoDataUrl = null;
+      _logoDataUrls = const [];
       _logoFileName = null;
     });
+  }
+
+  String _encodeLogoDataUrl(image_lib.Image source, int size) {
+    final resized = image_lib.copyResize(
+      source,
+      width: size,
+      height: size,
+      maintainAspect: true,
+      interpolation: image_lib.Interpolation.cubic,
+    );
+    final optimized = image_lib.encodePng(
+      image_lib.quantize(
+        resized,
+        numberOfColors: 64,
+        method: image_lib.QuantizeMethod.octree,
+      ),
+      level: 9,
+    );
+    return 'data:image/png;base64,${base64Encode(optimized)}';
   }
 
   void _showMessage(String message) {
@@ -166,16 +197,39 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
       return;
     }
 
-    final appName = _appNameController.text.trim();
-    final smartLink = SmartLink(
-      appName: appName,
-      logoPath: _logoDataUrl ?? widget.defaultConfig.logoPath,
-      appStoreUrl: _httpsUri(_iosController.text)!,
-      googlePlayUrl: _httpsUri(_androidController.text)!,
-    );
+    Uri? generatedUrl;
+    final logoPaths = _logoDataUrls.isEmpty
+        ? [widget.defaultConfig.logoPath]
+        : _logoDataUrls;
+    for (final logoPath in logoPaths) {
+      final smartLink = SmartLink(
+        appName: _appNameController.text.trim(),
+        logoPath: logoPath,
+        appStoreUrl: _httpsUri(_iosController.text)!,
+        googlePlayUrl: _httpsUri(_androidController.text)!,
+      );
+      final candidate = smartLink.shareUri(widget.currentUri);
+      try {
+        QrCode.fromData(
+          data: candidate.toString(),
+          errorCorrectLevel: _qrErrorCorrectionLevel,
+        );
+        generatedUrl = candidate;
+        break;
+      } on Object {
+        // Try the next, smaller logo until the complete smart link fits.
+      }
+    }
+
+    if (generatedUrl == null) {
+      _showMessage(
+        'The links are too long for one QR code. Try shorter store links.',
+      );
+      return;
+    }
 
     setState(() {
-      _generatedUrl = smartLink.shareUri(widget.currentUri);
+      _generatedUrl = generatedUrl;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -674,22 +728,28 @@ class _ResultCard extends StatelessWidget {
                 ),
                 child: Padding(
                   padding: const EdgeInsets.all(14),
-                  child: QrImageView(
-                    data: url.toString(),
-                    size: 220,
-                    backgroundColor: Colors.white,
-                    errorCorrectionLevel: QrErrorCorrectLevel.Q,
-                    embeddedImage: logo,
-                    embeddedImageStyle: const QrEmbeddedImageStyle(
-                      size: Size.square(42),
-                    ),
-                    eyeStyle: const QrEyeStyle(
-                      eyeShape: QrEyeShape.square,
-                      color: Color(0xFF202735),
-                    ),
-                    dataModuleStyle: const QrDataModuleStyle(
-                      dataModuleShape: QrDataModuleShape.square,
-                      color: Color(0xFF202735),
+                  child: SizedBox.square(
+                    dimension: 220,
+                    child: PrettyQrView.data(
+                      key: const ValueKey('generated-qr'),
+                      data: url.toString(),
+                      errorCorrectLevel:
+                          _LinkBuilderPageState._qrErrorCorrectionLevel,
+                      decoration: PrettyQrDecoration(
+                        background: Colors.white,
+                        quietZone: PrettyQrQuietZone.zero,
+                        shape: const PrettyQrSquaresSymbol(
+                          color: Color(0xFF202735),
+                        ),
+                        image: PrettyQrDecorationImage(
+                          image: logo,
+                          scale: 0.18,
+                          fit: BoxFit.contain,
+                          filterQuality: FilterQuality.high,
+                          isAntiAlias: true,
+                          padding: const EdgeInsets.all(2),
+                        ),
+                      ),
                     ),
                   ),
                 ),

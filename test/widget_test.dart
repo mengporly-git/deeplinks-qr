@@ -3,7 +3,6 @@ import 'package:deeplinks_qr/main.dart';
 import 'package:deeplinks_qr/smart_link.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
-import 'package:qr_flutter/qr_flutter.dart';
 
 final config = AppConfig(
   appName: 'Example App',
@@ -58,10 +57,7 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Your smart QR is ready'), findsOneWidget);
     expect(find.text('Download QR'), findsOneWidget);
-    expect(
-      tester.widget<QrImageView>(find.byType(QrImageView)).embeddedImage,
-      isNotNull,
-    );
+    expect(find.byKey(const ValueKey('generated-qr')), findsOneWidget);
   });
 
   testWidgets('generated destination shows desktop store choices', (
