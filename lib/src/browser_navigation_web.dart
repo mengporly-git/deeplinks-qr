@@ -26,3 +26,6 @@ VisitorPlatform detectVisitorPlatform() {
 void replaceLocation(Uri url) => web.window.location.replace(url.toString());
 
 void assignLocation(Uri url) => web.window.location.assign(url.toString());
+
+void openInNewTab(Uri url) =>
+    web.window.open(url.toString(), '_blank', 'noopener,noreferrer');

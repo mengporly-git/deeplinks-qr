@@ -1,8 +1,10 @@
 import 'package:deeplinks_qr/app_config.dart';
+import 'package:deeplinks_qr/link_builder_page.dart';
 import 'package:deeplinks_qr/main.dart';
 import 'package:deeplinks_qr/smart_link.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:pretty_qr_code/pretty_qr_code.dart';
 
 final config = AppConfig(
   appName: 'Example App',
@@ -98,5 +100,65 @@ void main() {
     expect(parsed.huaweiAppGalleryUrl, link.huaweiAppGalleryUrl);
     expect(parsed.otherDevicesUrl, link.otherDevicesUrl);
     expect(parsed.qrName, 'Launch QR');
+    expect(uri.queryParameters, isNot(contains('logo')));
+  });
+
+  test('selected logo is not included in the smart link', () {
+    final link = SmartLink(
+      appName: 'Example App',
+      logoPath: 'data:image/png;base64,custom-logo-data',
+      appStoreUrl: config.appStoreUrl,
+      googlePlayUrl: config.googlePlayUrl,
+    );
+
+    final uri = link.shareUri(Uri.parse('https://example.com/downloads/'));
+    final parsed = SmartLink.tryParse(uri)!;
+
+    expect(uri.queryParameters, isNot(contains('logo')));
+    expect(parsed.logoPath, 'assets/logo.png');
+  });
+
+  test('QR decoration has no default logo', () {
+    expect(qrDecoration(null).image, isNull);
+    expect(qrDecoration(const AssetImage('assets/logo.png')).image, isNotNull);
+  });
+
+  test('QR generation skips an oversized payload', () {
+    final tooLarge = Uri.parse(
+      'https://example.com/download?logo=${List.filled(4000, 'x').join()}',
+    );
+    final fitting = Uri.parse('https://example.com/download?logo=small');
+
+    final result = selectFirstFittingQrCode([tooLarge, fitting]);
+
+    expect(result, isNotNull);
+    expect(result!.url, fitting);
+  });
+
+  testWidgets('dense QR with a logo renders at preview size', (tester) async {
+    final denseUrl = Uri.parse(
+      'https://example.com/download?data=${List.filled(2200, 'x').join()}',
+    );
+    final result = selectFirstFittingQrCode([denseUrl]);
+
+    expect(result, isNotNull);
+    expect(result!.image.typeNumber, greaterThanOrEqualTo(24));
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: Center(
+          child: SizedBox.square(
+            dimension: 220,
+            child: PrettyQrView(
+              qrImage: result.image,
+              decoration: qrDecoration(const AssetImage('assets/logo.png')),
+            ),
+          ),
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+
+    expect(tester.takeException(), isNull);
   });
 }

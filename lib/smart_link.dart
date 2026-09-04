@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'app_config.dart';
 
 class SmartLink extends AppConfig {
@@ -28,7 +30,7 @@ class SmartLink extends AppConfig {
 
     return SmartLink(
       appName: appName,
-      logoPath: _clean(query['logo']) ?? 'assets/logo.png',
+      logoPath: _decodeLogo(query['logo']) ?? 'assets/logo.png',
       appStoreUrl: ios,
       googlePlayUrl: android,
       huaweiAppGalleryUrl: _tryHttps(query['huawei']),
@@ -43,7 +45,6 @@ class SmartLink extends AppConfig {
       'ios': appStoreUrl.toString(),
       'android': googlePlayUrl.toString(),
       'appName': appName,
-      'logo': logoPath,
       if (huaweiAppGalleryUrl case final url?) 'huawei': url.toString(),
       if (otherDevicesUrl case final url?) 'other': url.toString(),
       'qrName': ?qrName,
@@ -55,6 +56,24 @@ class SmartLink extends AppConfig {
   static String? _clean(String? value) {
     final cleaned = value?.trim();
     return cleaned == null || cleaned.isEmpty ? null : cleaned;
+  }
+
+  static String? _decodeLogo(String? value) {
+    final cleaned = _clean(value);
+    if (cleaned == null || !cleaned.startsWith('p.')) {
+      return cleaned;
+    }
+
+    try {
+      final encoded = cleaned.substring(2);
+      final paddingLength = (4 - encoded.length % 4) % 4;
+      final bytes = base64Url.decode(
+        encoded.padRight(encoded.length + paddingLength, '='),
+      );
+      return 'data:image/png;base64,${base64Encode(bytes)}';
+    } on FormatException {
+      return null;
+    }
   }
 
   static Uri? _tryHttps(String? value) {

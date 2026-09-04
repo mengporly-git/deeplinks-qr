@@ -28,11 +28,11 @@ environment:
 # the latest version available on pub.dev. To see which dependencies have newer
 # versions available, run `flutter pub outdated`.
 dependencies:
-  cupertino_icons: ^1.0.8
-  file_picker: ^11.0.3
+  cupertino_icons: ^1.0.9
+  file_picker: ^12.2.0
   flutter:
     sdk: flutter
-  image: ^4.9.1
+  image: ^4.9.2
   pretty_qr_code: ^3.6.0
   web: ^1.1.1
 

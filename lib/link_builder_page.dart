@@ -1,4 +1,3 @@
-import 'dart:convert';
 import 'dart:ui' as ui;
 
 import 'package:file_picker/file_picker.dart';
@@ -11,6 +10,41 @@ import 'package:pretty_qr_code/pretty_qr_code.dart';
 import 'app_config.dart';
 import 'browser_navigation.dart';
 import 'smart_link.dart';
+
+const qrErrorCorrectionLevel = QrErrorCorrectLevel.M;
+
+({Uri url, QrImage image})? selectFirstFittingQrCode(Iterable<Uri> candidates) {
+  for (final candidate in candidates) {
+    try {
+      final qrCode = QrCode.fromData(
+        data: candidate.toString(),
+        errorCorrectLevel: qrErrorCorrectionLevel,
+      );
+      return (url: candidate, image: QrImage(qrCode));
+    } on InputTooLongException {
+      // The final QrImage construction performs the QR capacity check.
+    }
+  }
+  return null;
+}
+
+PrettyQrDecoration qrDecoration(ImageProvider<Object>? logo) {
+  return PrettyQrDecoration(
+    background: Colors.white,
+    quietZone: PrettyQrQuietZone.zero,
+    shape: const PrettyQrSmoothSymbol(color: Color(0xFF202735), roundFactor: 0),
+    image: logo == null
+        ? null
+        : PrettyQrDecorationImage(
+            image: logo,
+            scale: 0.18,
+            fit: BoxFit.contain,
+            filterQuality: FilterQuality.high,
+            isAntiAlias: true,
+            padding: const EdgeInsets.all(2),
+          ),
+  );
+}
 
 class LinkBuilderPage extends StatefulWidget {
   const LinkBuilderPage({
@@ -27,8 +61,6 @@ class LinkBuilderPage extends StatefulWidget {
 }
 
 class _LinkBuilderPageState extends State<LinkBuilderPage> {
-  static const _qrErrorCorrectionLevel = QrErrorCorrectLevel.M;
-
   final _formKey = GlobalKey<FormState>();
   final _resultKey = GlobalKey();
   final _qrBoundaryKey = GlobalKey();
@@ -38,8 +70,8 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
   late final TextEditingController _appNameController;
 
   Uri? _generatedUrl;
+  QrImage? _generatedQrImage;
   Uint8List? _logoPreviewBytes;
-  List<String> _logoDataUrls = const [];
   String? _logoFileName;
   bool _isPickingLogo = false;
   bool _isDownloadingQr = false;
@@ -76,22 +108,21 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
   Future<void> _pickLogo() async {
     setState(() => _isPickingLogo = true);
     try {
-      final result = await FilePicker.pickFiles(
-        type: FileType.image,
-        allowMultiple: false,
-        withData: true,
-      );
-      if (!mounted || result == null || result.files.isEmpty) {
+      final file = await FilePicker.pickFile(type: FileType.image);
+      if (!mounted || file == null) {
         return;
       }
 
-      final file = result.files.single;
-      final bytes = file.bytes;
-      if (bytes == null) {
-        _showMessage('The selected image could not be read.');
+      final knownLength = file.lengthSync();
+      if (knownLength != null && knownLength > 10 * 1024 * 1024) {
+        _showMessage('Choose an image smaller than 10 MB.');
         return;
       }
-      if (file.size > 10 * 1024 * 1024) {
+      final bytes = await file.readAsBytes();
+      if (!mounted) {
+        return;
+      }
+      if (bytes.length > 10 * 1024 * 1024) {
         _showMessage('Choose an image smaller than 10 MB.');
         return;
       }
@@ -102,28 +133,8 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
         return;
       }
 
-      final longestSide = decoded.width > decoded.height
-          ? decoded.width
-          : decoded.height;
-      final largestSize = longestSide.clamp(1, 192);
-      final sizes = <int>{
-        largestSize,
-        160,
-        128,
-        112,
-        96,
-        80,
-        64,
-        48,
-        32,
-      }.where((size) => size <= largestSize);
-      final optimizedLogos = [
-        for (final size in sizes) _encodeLogoDataUrl(decoded, size),
-      ];
-
       setState(() {
         _logoPreviewBytes = bytes;
-        _logoDataUrls = optimizedLogos;
         _logoFileName = file.name;
       });
     } on Object {
@@ -140,28 +151,8 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
   void _removeLogo() {
     setState(() {
       _logoPreviewBytes = null;
-      _logoDataUrls = const [];
       _logoFileName = null;
     });
-  }
-
-  String _encodeLogoDataUrl(image_lib.Image source, int size) {
-    final resized = image_lib.copyResize(
-      source,
-      width: size,
-      height: size,
-      maintainAspect: true,
-      interpolation: image_lib.Interpolation.cubic,
-    );
-    final optimized = image_lib.encodePng(
-      image_lib.quantize(
-        resized,
-        numberOfColors: 64,
-        method: image_lib.QuantizeMethod.octree,
-      ),
-      level: 9,
-    );
-    return 'data:image/png;base64,${base64Encode(optimized)}';
   }
 
   void _showMessage(String message) {
@@ -197,31 +188,16 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
       return;
     }
 
-    Uri? generatedUrl;
-    final logoPaths = _logoDataUrls.isEmpty
-        ? [widget.defaultConfig.logoPath]
-        : _logoDataUrls;
-    for (final logoPath in logoPaths) {
-      final smartLink = SmartLink(
+    final generated = selectFirstFittingQrCode([
+      SmartLink(
         appName: _appNameController.text.trim(),
-        logoPath: logoPath,
+        logoPath: widget.defaultConfig.logoPath,
         appStoreUrl: _httpsUri(_iosController.text)!,
         googlePlayUrl: _httpsUri(_androidController.text)!,
-      );
-      final candidate = smartLink.shareUri(widget.currentUri);
-      try {
-        QrCode.fromData(
-          data: candidate.toString(),
-          errorCorrectLevel: _qrErrorCorrectionLevel,
-        );
-        generatedUrl = candidate;
-        break;
-      } on Object {
-        // Try the next, smaller logo until the complete smart link fits.
-      }
-    }
+      ).shareUri(widget.currentUri),
+    ]);
 
-    if (generatedUrl == null) {
+    if (generated == null) {
       _showMessage(
         'The links are too long for one QR code. Try shorter store links.',
       );
@@ -229,7 +205,8 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
     }
 
     setState(() {
-      _generatedUrl = generatedUrl;
+      _generatedUrl = generated.url;
+      _generatedQrImage = generated.image;
     });
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -426,18 +403,21 @@ class _LinkBuilderPageState extends State<LinkBuilderPage> {
                       ),
                     ),
                   ),
-                  if (_generatedUrl case final url?) ...[
+                  if ((_generatedUrl, _generatedQrImage) case (
+                    final url?,
+                    final qrImage?,
+                  )) ...[
                     const SizedBox(height: 28),
                     _ResultCard(
                       key: _resultKey,
                       url: url,
+                      qrImage: qrImage,
                       qrBoundaryKey: _qrBoundaryKey,
                       logoBytes: _logoPreviewBytes,
-                      fallbackLogoPath: widget.defaultConfig.logoPath,
                       isDownloading: _isDownloadingQr,
                       onDownload: _downloadQr,
                       onCopy: _copyLink,
-                      onOpen: () => assignLocation(url),
+                      onOpen: () => openInNewTab(url),
                     ),
                   ],
                 ],
@@ -664,7 +644,7 @@ class _LogoPicker extends StatelessWidget {
           SizedBox(width: compact ? 11 : 18),
           Tooltip(
             message:
-                'Choose a logo from your device. It is optimized and embedded in the smart QR link.',
+                'Choose an optional logo for the center of the QR image. It is not added to the destination link.',
             triggerMode: TooltipTriggerMode.tap,
             showDuration: const Duration(seconds: 5),
             preferBelow: false,
@@ -684,9 +664,9 @@ class _ResultCard extends StatelessWidget {
   const _ResultCard({
     super.key,
     required this.url,
+    required this.qrImage,
     required this.qrBoundaryKey,
     required this.logoBytes,
-    required this.fallbackLogoPath,
     required this.isDownloading,
     required this.onDownload,
     required this.onCopy,
@@ -694,9 +674,9 @@ class _ResultCard extends StatelessWidget {
   });
 
   final Uri url;
+  final QrImage qrImage;
   final GlobalKey qrBoundaryKey;
   final Uint8List? logoBytes;
-  final String fallbackLogoPath;
   final bool isDownloading;
   final VoidCallback onDownload;
   final VoidCallback onCopy;
@@ -715,8 +695,8 @@ class _ResultCard extends StatelessWidget {
         child: LayoutBuilder(
           builder: (context, constraints) {
             final compact = constraints.maxWidth < 680;
-            final ImageProvider<Object> logo = logoBytes == null
-                ? AssetImage(fallbackLogoPath)
+            final ImageProvider<Object>? logo = logoBytes == null
+                ? null
                 : MemoryImage(logoBytes!);
             final qr = RepaintBoundary(
               key: qrBoundaryKey,
@@ -730,26 +710,10 @@ class _ResultCard extends StatelessWidget {
                   padding: const EdgeInsets.all(14),
                   child: SizedBox.square(
                     dimension: 220,
-                    child: PrettyQrView.data(
+                    child: PrettyQrView(
                       key: const ValueKey('generated-qr'),
-                      data: url.toString(),
-                      errorCorrectLevel:
-                          _LinkBuilderPageState._qrErrorCorrectionLevel,
-                      decoration: PrettyQrDecoration(
-                        background: Colors.white,
-                        quietZone: PrettyQrQuietZone.zero,
-                        shape: const PrettyQrSquaresSymbol(
-                          color: Color(0xFF202735),
-                        ),
-                        image: PrettyQrDecorationImage(
-                          image: logo,
-                          scale: 0.18,
-                          fit: BoxFit.contain,
-                          filterQuality: FilterQuality.high,
-                          isAntiAlias: true,
-                          padding: const EdgeInsets.all(2),
-                        ),
-                      ),
+                      qrImage: qrImage,
+                      decoration: qrDecoration(logo),
                     ),
                   ),
                 ),
