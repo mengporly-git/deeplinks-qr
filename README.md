@@ -1,18 +1,36 @@
-# Flutter QR download landing page
+# Flutter smart download QR
 
-A GitHub Pages-ready smart-link and QR builder:
+A Flutter Web QR builder and mobile-app download landing page designed for
+GitHub Pages.
 
-- The root page provides a form for all destination links, QR name, app name,
-  and logo.
-- The form generates both a QR code and a shareable destination URL.
-- Android visitors are sent automatically to Google Play.
-- iPhone and iPad visitors are sent automatically to the App Store.
-- Desktop visitors see both App Store and Google Play download buttons.
+## Features
 
-The app uses [`package:web`](https://pub.dev/packages/web) instead of the
-deprecated `dart:html` library.
+- Generates one smart link for App Store and Google Play destinations.
+- Creates a downloadable PNG QR code with `pretty_qr_code`.
+- Supports an optional user-selected logo in the center of the QR image.
+- Generates a plain QR code when no logo is selected.
+- Keeps selected logo bytes out of the destination URL.
+- Opens **Open download page** in a new browser tab.
+- Redirects iPhone and iPad visitors to the App Store.
+- Redirects Android visitors to Google Play.
+- Shows both store buttons to desktop visitors.
 
-## 1. Set form defaults
+## Logo behavior
+
+There are two separate logo uses:
+
+1. `assets/logo.png` is the application logo displayed on the download landing
+   page. Replace this file to change the deployed landing-page branding.
+2. **Choose app logo** selects an optional image for the center of the generated
+   QR image. The original selected image is used for clear rendering.
+
+The selected QR logo is not stored in the smart link and is not transferred to
+the download page. If no image is selected, the QR has no center logo. Older
+links that already contain embedded logo data remain readable.
+
+The **Download QR** button exports the QR and its optional center logo as a PNG.
+
+## Configure defaults
 
 Edit `assets/config.json`:
 
@@ -25,23 +43,15 @@ Edit `assets/config.json`:
 }
 ```
 
-Replace `assets/logo.png` with your own PNG, or add another image anywhere under
-`assets/` and update `logoPath`. Keep the image filename lowercase and avoid
-spaces for the most reliable web deployment.
+The App Store and Google Play values prefill the form when they are not
+placeholders. The app-name input starts empty. Keep all store links as complete
+HTTPS URLs.
 
-The store URL values prefill the browser form when they are not placeholders.
-The app-name input intentionally starts empty. Rebuild and redeploy after
-changing configuration defaults.
+Replace the contents of `assets/logo.png` to customize the landing page. Keep
+the filename lowercase and without spaces for reliable web deployment. Rebuild
+and redeploy after changing assets or configuration.
 
-The logo control opens a local image picker. Selected images are resized and
-compressed before being embedded in the smart link so the generated QR remains
-portable across devices. The logo is also placed in the center of the QR image.
-If no image is selected, `assets/logo.png` is used.
-
-The generated result includes a **Download QR** button that saves the complete
-QR and centered logo as a PNG image.
-
-## 2. Run locally
+## Run locally
 
 From this project folder:
 
@@ -51,16 +61,25 @@ flutter pub get
 flutter run -d chrome
 ```
 
-To test the desktop layout in any browser without Chrome device launching:
+Alternatively, run a browser-independent local web server:
 
 ```bash
 flutter run -d web-server
 ```
 
-Open the local URL printed by Flutter, complete the form, and select **Create QR
-code**. Automatic redirects are best verified on real devices after deployment.
+Open the URL printed by Flutter and enter:
 
-## 3. Check and build
+1. The App Store link.
+2. The Google Play link.
+3. The app name.
+4. An optional QR logo.
+
+Select **Create QR code**. You can then download the QR, copy its smart link, or
+open the download page in a new tab.
+
+Automatic device redirects are best verified on real phones after deployment.
+
+## Analyze, test, and build
 
 ```bash
 flutter analyze
@@ -68,19 +87,20 @@ flutter test
 flutter build web --release --base-href /YOUR_REPOSITORY_NAME/
 ```
 
-For a GitHub user or organization site named `USERNAME.github.io`, use:
+For a GitHub user or organization site named `USERNAME.github.io`, build with:
 
 ```bash
 flutter build web --release --base-href /
 ```
 
-The output is written to `build/web`.
+Flutter writes the production files to `build/web`.
 
-## 4. Deploy with GitHub Pages
+## Deploy with GitHub Pages
 
-The workflow at `.github/workflows/deploy.yml` builds and deploys every push to
-`main`. It automatically chooses `/REPOSITORY_NAME/` for project sites and `/`
-for repositories named `USERNAME.github.io`.
+The workflow in `.github/workflows/deploy.yml` analyzes, tests, builds, and
+deploys the app whenever `main` is updated. It automatically uses
+`/REPOSITORY_NAME/` for project sites and `/` for repositories named
+`USERNAME.github.io`.
 
 Create an empty GitHub repository, then run:
 
@@ -93,19 +113,29 @@ git remote add origin https://github.com/YOUR_USERNAME/YOUR_REPOSITORY_NAME.git
 git push -u origin main
 ```
 
-On GitHub, open **Settings → Pages**, set **Source** to **GitHub Actions**, then
-open the **Actions** tab to watch deployment. Your project-site URL will be:
+On GitHub, open **Settings → Pages** and set **Source** to **GitHub Actions**.
+The deployed project-site URL will be:
 
 ```text
 https://YOUR_USERNAME.github.io/YOUR_REPOSITORY_NAME/
 ```
 
-Open that deployed URL, enter the store links, and select **Create QR code**.
-Copy the generated destination link or use the displayed QR image. Store links
-are encoded in that destination URL, so keep the complete query string.
+The generated smart link stores only the app name and destination URLs in its
+query string. Keep the complete query string when copying or sharing it.
 
-## How redirect detection works
+## Redirect behavior
 
-The destination page checks the browser user agent. It also recognizes iPadOS
-devices that identify themselves as macOS. Store buttons stay visible as a
-manual fallback if a browser blocks or delays automatic navigation.
+The download page checks the browser user agent and recognizes iPadOS devices
+that identify themselves as macOS. Mobile visitors are redirected to the
+matching store. Store buttons remain visible as a fallback when automatic
+navigation is blocked or delayed.
+
+## Main packages
+
+- [`pretty_qr_code`](https://pub.dev/packages/pretty_qr_code) renders and
+  exports the QR image.
+- [`file_picker`](https://pub.dev/packages/file_picker) selects an optional QR
+  logo and saves the exported PNG.
+- [`image`](https://pub.dev/packages/image) validates selected image files.
+- [`web`](https://pub.dev/packages/web) provides browser navigation and device
+  detection without deprecated `dart:html` APIs.
