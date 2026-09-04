@@ -1,0 +1,6 @@
+{
+  "appName": "My App",
+  "logoPath": "assets/logo.png",
+  "appStoreUrl": "https://apps.apple.com/app/idYOUR_APP_ID",
+  "googlePlayUrl": "https://play.google.com/store/apps/details?id=com.example.app"
+}
